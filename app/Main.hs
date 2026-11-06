@@ -12,7 +12,13 @@ import Data.List (intersperse)
 import System.IO (hSetBuffering, stdout, stdin, BufferMode(NoBuffering))
 
 prettyPrint :: Board -> IO ()
-prettyPrint = undefined
+prettyPrint board = mapM_ printRow (rows board)
+  where
+    printRow row = putStrLn (unwords (map showCell row))
+
+    showCell Empty = "-"
+    showCell (Taken X) = "X"
+    showCell (Taken O) = "O"
 
 -- The following reflect the suggested structure, but you can manage the game
 -- in any way you see fit.
@@ -23,24 +29,63 @@ prettyPrint = undefined
 -- doParseAction :: (String -> Maybe a) -> IO a
 -- doParseAction :: String -> (String -> Maybe a) -> IO a
 
+prompt :: String -> (String -> Maybe a) -> IO a
+prompt message parse = do
+  putStrLn message
+  input <- getLine
+  check (parse input)
+  where
+    check (Just x) = pure x
+    check Nothing = do
+      putStrLn "Invalid input, try again."
+      prompt message parse
+
 -- | Repeatedly read a target board position and invoke tryMove until
 -- the move is successful (Just ...).
 takeTurn :: Board -> Player -> IO Board
-takeTurn = undefined
+takeTurn board player = prompt message attempt
+  where
+    message = "Player " ++ show player ++ ", make your move (row col):"
+
+    attempt input = do
+      position <- parsePosition input
+      tryMove player position board
 
 -- | Manage a game by repeatedly: 1. printing the current board, 2. using
 -- takeTurn to return a modified board, 3. checking if the game is over,
 -- printing the board and a suitable congratulatory message to the winner
 -- if so.
 playGame :: Board -> Player -> IO ()
-playGame = undefined
+playGame board player = do
+  prettyPrint board
+  newBoard <- takeTurn board player
+  continue newBoard
+  where
+    continue newBoard
+      | gameOver newBoard = do
+          prettyPrint newBoard
+          putStrLn ("Player " ++ show player ++ " has won!")
+      | boardFull newBoard = do
+          prettyPrint newBoard
+          putStrLn "It's a draw!"
+      | otherwise = playGame newBoard (swap player)
+
+    boardFull (Board _ cells) = all (not . isEmpty) cells
 
 -- | Print a welcome message, read the board dimension, invoke playGame and
 -- exit with a suitable message.
 main :: IO ()
 main = do
   disableBuffering -- don't remove!
-  return ()
+  putStrLn "Welcome to tic tac toe on an N x N board"
+  n <- prompt "Enter the board size (N):" parseSize
+  playGame (emptyBoard n) startingPlayer
+  putStrLn "Thank you for playing"
+  where
+    parseSize :: String -> Maybe Int
+    parseSize input
+      | Just n <- readMaybe input, n >= 1 = Just n
+      | otherwise = Nothing
 
 {-|
 When ran via `cabal run`, Haskell will "buffer" the input and output streams
